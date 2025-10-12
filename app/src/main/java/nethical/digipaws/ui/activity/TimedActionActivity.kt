@@ -10,6 +10,7 @@ import android.widget.Toast
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.ActivityResultLauncher
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
@@ -164,40 +165,44 @@ class TimedActionActivity : AppCompatActivity() {
 
             selectUnblockedAppsLauncher.launch(intent)
         }
-        MaterialAlertDialogBuilder(this)
-            .setView(dialogAddToTimedActionBinding.root)
-            .setPositiveButton(getString(R.string.add)) { dialog, _ ->
-                if (dialogAddToTimedActionBinding.cheatHourTitle.text?.isEmpty() == true) {
-                    Toast.makeText(
-                        this,
-                        getString(R.string.please_type_a_title),
-                        Toast.LENGTH_SHORT
-                    ).show()
-                } else if (selectedUnblockedApps?.isEmpty() == true) {
-                    Toast.makeText(
-                        this,
-                        getString(R.string.please_select_a_few_apps), Toast.LENGTH_SHORT
-                    )
-                        .show()
-                } else {
-                    timedActionList.add(
-                        AutoTimedActionItem(
-                            dialogAddToTimedActionBinding.cheatHourTitle.text.toString(),
-                            startTimeInMins!!,
-                            endTimeInMins!!,
-                            selectedUnblockedApps!!
-                        )
-                    )
-                    binding.recyclerView2.adapter?.notifyItemInserted(timedActionList.size)
-                    saveList()
-                    dialog.dismiss()
-                }
 
-            }
+        selectedUnblockedApps?.clear()
+
+        val dialog = MaterialAlertDialogBuilder(this)
+            .setView(dialogAddToTimedActionBinding.root)
+            .setPositiveButton(getString(R.string.add), null)
             .setNegativeButton(getString(R.string.cancel)) { dialog, _ ->
                 dialog.dismiss()
             }
             .show()
+
+        dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
+            if (dialogAddToTimedActionBinding.cheatHourTitle.text?.isEmpty() == true) {
+                Toast.makeText(
+                    this,
+                    getString(R.string.please_type_a_title),
+                    Toast.LENGTH_SHORT
+                ).show()
+            } else if (selectedUnblockedApps?.isEmpty() == true) {
+                Toast.makeText(
+                    this,
+                    getString(R.string.please_select_a_few_apps),
+                    Toast.LENGTH_SHORT
+                ).show()
+            } else {
+                timedActionList.add(
+                    AutoTimedActionItem(
+                        dialogAddToTimedActionBinding.cheatHourTitle.text.toString(),
+                        startTimeInMins!!,
+                        endTimeInMins!!,
+                        selectedUnblockedApps!!
+                    )
+                )
+                binding.recyclerView2.adapter?.notifyItemInserted(timedActionList.size)
+                saveList()
+                dialog.dismiss()
+            }
+        }
     }
 
 
