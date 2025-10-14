@@ -16,6 +16,7 @@ import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
+import com.google.android.material.card.MaterialCardView
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import nethical.digipaws.R
 import nethical.digipaws.databinding.ActivityAddTimedActionActivityBinding
@@ -80,7 +81,10 @@ class TimedActionActivity : AppCompatActivity() {
             }
 
         binding.recyclerView2.layoutManager = LinearLayoutManager(this)
-        binding.recyclerView2.adapter = CheatHourAdapter(timedActionList)
+        binding.recyclerView2.adapter = CheatHourAdapter(timedActionList) { item ->
+            val position = timedActionList.indexOf(item)
+            makeCheatHoursDialog(item, position)
+        }
 
         binding.button.setOnClickListener {
             makeCheatHoursDialog()
@@ -88,23 +92,32 @@ class TimedActionActivity : AppCompatActivity() {
     }
 
     @SuppressLint("ClickableViewAccessibility", "SetTextI18n")
-    private fun makeCheatHoursDialog() {
-
-
+    private fun makeCheatHoursDialog(
+        itemToEdit: AutoTimedActionItem? = null,
+        itemPosition: Int? = null
+    ) {
         dialogAddToTimedActionBinding = DialogAddTimedActionBinding.inflate(layoutInflater)
 
-        val startTime = TimeRangePicker.Time(6, 30)
-        val endTime = TimeRangePicker.Time(22, 0)
+        var startTimeInMins: Int = TimeRangePicker.Time(6, 30).totalMinutes
+        var endTimeInMins: Int = TimeRangePicker.Time(22, 0).totalMinutes
 
-        var startTimeInMins: Int = startTime.totalMinutes
-        var endTimeInMins: Int = endTime.totalMinutes
+        selectedUnblockedApps = ArrayList()
+
+        if (itemToEdit != null) {
+            dialogAddToTimedActionBinding.cheatHourTitle.setText(itemToEdit.title)
+            startTimeInMins = itemToEdit.startTimeInMins
+            endTimeInMins = itemToEdit.endTimeInMins
+            selectedUnblockedApps = ArrayList(itemToEdit.packages)
+        }
 
         dialogAddToTimedActionBinding.picker.hourFormat = TimeRangePicker.HourFormat.FORMAT_24
-
         dialogAddToTimedActionBinding.picker.startTimeMinutes = startTimeInMins
         dialogAddToTimedActionBinding.picker.endTimeMinutes = endTimeInMins
-        dialogAddToTimedActionBinding.fromTime.text = startTime.toString()
-        dialogAddToTimedActionBinding.endTime.text = endTime.toString()
+
+        dialogAddToTimedActionBinding.fromTime.text =
+            TimeRangePicker.Time(startTimeInMins / 60, startTimeInMins % 60).toString()
+        dialogAddToTimedActionBinding.endTime.text =
+            TimeRangePicker.Time(endTimeInMins / 60, endTimeInMins % 60).toString()
 
         dialogAddToTimedActionBinding.picker.setOnTouchListener { v, event ->
             // Disable ScrollView's touch interception when interacting with the picker
@@ -140,7 +153,13 @@ class TimedActionActivity : AppCompatActivity() {
         when (selectedMode) {
             MODE_AUTO_FOCUS -> {
                 dialogAddToTimedActionBinding.timedTitle.text = "Specify Auto-Focus Hours"
-                dialogAddToTimedActionBinding.btnSelectUnblockedApps.text = "Select Apps to Block"
+                if (itemToEdit != null) {
+                    dialogAddToTimedActionBinding.btnSelectUnblockedApps.text =
+                        getString(R.string.app_s_selected, itemToEdit.packages.size)
+                } else {
+                    dialogAddToTimedActionBinding.btnSelectUnblockedApps.text =
+                        "Select Apps to Block"
+                }
             }
 
             MODE_APP_BLOCKER_CHEAT_HOURS -> {
@@ -166,52 +185,77 @@ class TimedActionActivity : AppCompatActivity() {
             selectUnblockedAppsLauncher.launch(intent)
         }
 
-        selectedUnblockedApps?.clear()
+        val positiveButtonText = if (itemToEdit != null) {
+            getString(R.string.save)
+        } else {
+            getString(R.string.add)
+        }
 
         val dialog = MaterialAlertDialogBuilder(this)
             .setView(dialogAddToTimedActionBinding.root)
-            .setPositiveButton(getString(R.string.add), null)
+            .setPositiveButton(positiveButtonText, null)
             .setNegativeButton(getString(R.string.cancel)) { dialog, _ ->
                 dialog.dismiss()
             }
             .show()
 
         dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
-            if (dialogAddToTimedActionBinding.cheatHourTitle.text?.isEmpty() == true) {
-                Toast.makeText(
-                    this,
-                    getString(R.string.please_type_a_title),
-                    Toast.LENGTH_SHORT
-                ).show()
-            } else if (selectedUnblockedApps?.isEmpty() == true) {
-                Toast.makeText(
-                    this,
-                    getString(R.string.please_select_a_few_apps),
-                    Toast.LENGTH_SHORT
-                ).show()
-            } else {
-                timedActionList.add(
-                    AutoTimedActionItem(
-                        dialogAddToTimedActionBinding.cheatHourTitle.text.toString(),
-                        startTimeInMins!!,
-                        endTimeInMins!!,
-                        selectedUnblockedApps!!
+            val title = dialogAddToTimedActionBinding.cheatHourTitle.text?.toString()?.trim()
+            val apps = selectedUnblockedApps
+
+            when {
+                title.isNullOrEmpty() -> {
+                    Toast.makeText(
+                        this,
+                        getString(R.string.please_type_a_title),
+                        Toast.LENGTH_SHORT
+                    ).show()
+                }
+
+                apps.isNullOrEmpty() -> {
+                    Toast.makeText(
+                        this,
+                        getString(R.string.please_select_a_few_apps),
+                        Toast.LENGTH_SHORT
+                    ).show()
+                }
+
+                else -> {
+                    val newItem = AutoTimedActionItem(
+                        title,
+                        startTimeInMins,
+                        endTimeInMins,
+                        apps
                     )
-                )
-                binding.recyclerView2.adapter?.notifyItemInserted(timedActionList.size)
-                saveList()
-                dialog.dismiss()
+
+                    if (itemPosition != null) {
+                        timedActionList[itemPosition] = newItem
+                        binding.recyclerView2.adapter?.notifyItemChanged(itemPosition)
+                    } else {
+                        timedActionList.add(newItem)
+                        binding.recyclerView2.adapter?.notifyItemInserted(timedActionList.size - 1)
+                    }
+
+                    saveList()
+                    dialog.dismiss()
+                }
             }
         }
     }
 
 
     inner class CheatHourAdapter(
-        private val items: List<AutoTimedActionItem>
+        private val items: List<AutoTimedActionItem>,
+        private val onItemClick: (AutoTimedActionItem) -> Unit
     ) : RecyclerView.Adapter<CheatHourAdapter.CheatHourViewHolder>() {
 
-        inner class CheatHourViewHolder(private val binding: CheatHourItemBinding) :
+        inner class CheatHourViewHolder(
+            private val binding: CheatHourItemBinding
+        ) :
             RecyclerView.ViewHolder(binding.root) {
+
+            private val cardView: MaterialCardView =
+                itemView.findViewById(R.id.cheat_hour_card_view)
 
             @SuppressLint("SetTextI18n")
             fun bind(item: AutoTimedActionItem) {
@@ -236,6 +280,10 @@ class TimedActionActivity : AppCompatActivity() {
                 item.packages.forEach { packageName ->
                     binding.selectedApps.text =
                         binding.selectedApps.text.toString() + " " + packageName
+                }
+
+                cardView.setOnClickListener {
+                    onItemClick(item)
                 }
 
             }
