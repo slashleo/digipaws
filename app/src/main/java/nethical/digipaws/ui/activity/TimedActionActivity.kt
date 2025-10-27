@@ -16,6 +16,7 @@ import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
+import com.google.android.material.button.MaterialButton
 import com.google.android.material.card.MaterialCardView
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import nethical.digipaws.R
@@ -26,6 +27,10 @@ import nethical.digipaws.services.AppBlockerService
 import nethical.digipaws.utils.SavedPreferencesLoader
 import nethical.digipaws.utils.TimeTools
 import nl.joery.timerangepicker.TimeRangePicker
+import java.time.DayOfWeek
+import java.time.format.TextStyle
+import java.time.temporal.WeekFields
+import java.util.Locale
 
 class TimedActionActivity : AppCompatActivity() {
 
@@ -37,13 +42,11 @@ class TimedActionActivity : AppCompatActivity() {
     private lateinit var binding: ActivityAddTimedActionActivityBinding
     private val savedPreferencesLoader = SavedPreferencesLoader(this)
     private var timedActionList: MutableList<AutoTimedActionItem> = mutableListOf()
-
     private lateinit var selectUnblockedAppsLauncher: ActivityResultLauncher<Intent>
     private var selectedUnblockedApps: ArrayList<String>? = arrayListOf()
-
     private lateinit var dialogAddToTimedActionBinding: DialogAddTimedActionBinding
-
     private var selectedMode = MODE_APP_BLOCKER_CHEAT_HOURS
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
@@ -185,6 +188,33 @@ class TimedActionActivity : AppCompatActivity() {
             selectUnblockedAppsLauncher.launch(intent)
         }
 
+        val selectedWeekdays = itemToEdit?.weekdays ?: mutableSetOf()
+
+        val locale = Locale.getDefault()
+        val firstDay = WeekFields.of(locale).firstDayOfWeek
+        val weekdaysList = (0..6).map { firstDay.plus(it.toLong()) }
+
+        val buttons = (0 until dialogAddToTimedActionBinding.toggleWeekdays.childCount).map { i ->
+            dialogAddToTimedActionBinding.toggleWeekdays.getChildAt(i) as MaterialButton
+        }
+
+        buttons.zip(weekdaysList).forEach { (button, day) ->
+            button.tag = day
+            button.text = day.getDisplayName(TextStyle.SHORT, locale)
+            button.isChecked = selectedWeekdays.contains(day)
+        }
+
+        dialogAddToTimedActionBinding.toggleWeekdays.addOnButtonCheckedListener { group, checkedId, isChecked ->
+            val button = group.findViewById<MaterialButton>(checkedId)
+            val day = button.tag as? DayOfWeek ?: return@addOnButtonCheckedListener
+
+            if (isChecked) {
+                selectedWeekdays.add(day)
+            } else {
+                selectedWeekdays.remove(day)
+            }
+        }
+
         val positiveButtonText = if (itemToEdit != null) {
             getString(R.string.save)
         } else {
@@ -221,18 +251,20 @@ class TimedActionActivity : AppCompatActivity() {
                 }
 
                 else -> {
-                    val newItem = AutoTimedActionItem(
+                    val autoTimedActionItem = AutoTimedActionItem(
                         title,
                         startTimeInMins,
                         endTimeInMins,
-                        apps
+                        apps,
+                        false,
+                        selectedWeekdays
                     )
 
                     if (itemPosition != null) {
-                        timedActionList[itemPosition] = newItem
+                        timedActionList[itemPosition] = autoTimedActionItem
                         binding.recyclerView2.adapter?.notifyItemChanged(itemPosition)
                     } else {
-                        timedActionList.add(newItem)
+                        timedActionList.add(autoTimedActionItem)
                         binding.recyclerView2.adapter?.notifyItemInserted(timedActionList.size - 1)
                     }
 
@@ -324,7 +356,8 @@ class TimedActionActivity : AppCompatActivity() {
         val startTimeInMins: Int,
         val endTimeInMins: Int,
         val packages: ArrayList<String>,
-        val isProceedHidden: Boolean = false
+        val isProceedHidden: Boolean = false,
+        val weekdays: MutableSet<DayOfWeek> = DayOfWeek.entries.toMutableSet()
     )
 
 
